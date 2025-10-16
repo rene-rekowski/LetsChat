@@ -1,15 +1,17 @@
-package sever;
+package server;
 
 import java.io.*;
 import java.net.*;
 import java.util.*;
 
 public class ChatServer {
-    private static List<ClientHandler> clients = new ArrayList<>();
+
+    private static final int PORT = 5562;
+    private static final List<ClientHandler> clients = new ArrayList<>();
 
     public static void main(String[] args) throws IOException {
-        ServerSocket serverSocket = new ServerSocket(5560); // Port anpassen
-        System.out.println("Server gestartet. Wartet auf Clients...");
+        ServerSocket serverSocket = new ServerSocket(PORT);
+        System.out.println("Server gestartet. Wartet auf Clients auf Port " + PORT + "...");
 
         while (true) {
             Socket socket = serverSocket.accept();
@@ -19,7 +21,6 @@ public class ChatServer {
         }
     }
 
-    // Nachricht an alle außer Sender
     public static void broadcast(String message, ClientHandler sender) {
         for (ClientHandler c : clients) {
             if (c != sender) {
@@ -28,7 +29,6 @@ public class ChatServer {
         }
     }
 
-    // Online-Liste aktualisieren
     public static void updateUserList() {
         StringBuilder userList = new StringBuilder("USERS:");
         for (ClientHandler c : clients) {
@@ -40,7 +40,7 @@ public class ChatServer {
     }
 
     static class ClientHandler implements Runnable {
-        private Socket socket;
+        private final Socket socket;
         private PrintWriter out;
         private BufferedReader in;
         private String username;
@@ -54,9 +54,7 @@ public class ChatServer {
         }
 
         public void sendMessage(String message) {
-            if (out != null) {
-                out.println(message);
-            }
+            out.println(message);
         }
 
         @Override
@@ -65,29 +63,28 @@ public class ChatServer {
                 in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 out = new PrintWriter(socket.getOutputStream(), true);
 
-                // Name vom Client empfangen
+                // Name vom Client abfragen
                 out.println("NAME?");
                 username = in.readLine();
                 System.out.println(username + " hat den Chat betreten");
+
                 broadcast(username + " hat den Chat betreten", this);
                 updateUserList();
 
                 String msg;
                 while ((msg = in.readLine()) != null) {
-                    if ("EXIT".equalsIgnoreCase(msg.trim())) {
-                        // Client möchte rausgehen
-                        break;
-                    }
+                    if (msg.equalsIgnoreCase("EXIT")) break;
                     broadcast(username + ": " + msg, this);
                 }
+
             } catch (IOException e) {
-                System.out.println(username + " hat den Chat verlassen (Verbindung unterbrochen)");
+                System.out.println(username + " hat den Chat unerwartet verlassen");
             } finally {
                 try { socket.close(); } catch (IOException ignored) {}
                 clients.remove(this);
                 broadcast(username + " hat den Chat verlassen", this);
                 updateUserList();
-                System.out.println(username + " wurde aus der Online-Liste entfernt");
+                System.out.println(username + " entfernt. Aktuelle Clients: " + clients.size());
             }
         }
     }
