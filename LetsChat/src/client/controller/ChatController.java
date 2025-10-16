@@ -1,75 +1,76 @@
 package client.controller;
 
-import client.view.ChatView;
+import client.model.ChatModel;
+import client.model.Message;
+import client.model.User;
+
 import java.io.*;
-import java.net.*;
-import javafx.application.Platform;
+import java.net.Socket;
+import java.util.Arrays;
 
 public class ChatController {
-    private final ChatView view;
-    private final String username;
+    private final ChatModel model;
     private Socket socket;
     private PrintWriter out;
     private BufferedReader in;
+    private final String serverIP;
+    private final int serverPort;
+    private final String username;
 
-    public ChatController(ChatView view, String username) {
-        this.view = view;
+    public ChatController(ChatModel model, String serverIP, int serverPort, String username) {
+        this.model = model;
+        this.serverIP = serverIP;
+        this.serverPort = serverPort;
         this.username = username;
-        setupConnection();
-        setupInputListener();
     }
 
-    private void setupConnection() {
-        new Thread(() -> {
-            try {
-                socket = new Socket("192.168.178.22", 5562);
-                out = new PrintWriter(socket.getOutputStream(), true);
-                in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+    public void connect() throws IOException {
+        socket = new Socket(serverIP, serverPort);
+        out = new PrintWriter(socket.getOutputStream(), true);
+        in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
-                if ("NAME?".equals(in.readLine())) {
-                    out.println(username);
+        // Name senden
+        if ("NAME?".equals(in.readLine())) {
+            out.println(username);
+        }
+
+        // Thread für eingehende Nachrichten
+        new Thread(this::listen).start();
+    }
+
+    private void listen() {
+        String msg;
+        try {
+            while ((msg = in.readLine()) != null) {
+                if (msg.startsWith("USERS:")) {
+                    String[] names = msg.substring(6).split(",");
+                    model.getUsers().clear();
+                    Arrays.stream(names)
+                            .filter(s -> !s.isBlank())
+                            .forEach(n -> model.addUser(new User(n)));
+                } else {
+                    model.addMessage(new Message(msg.split(":")[0],
+                            msg.substring(msg.indexOf(":") + 1).trim()));
                 }
-
-                Platform.runLater(() -> view.inputField.setDisable(false));
-
-                String msg;
-                while ((msg = in.readLine()) != null) {
-                    String finalMsg = msg;
-                    Platform.runLater(() -> {
-                        if (finalMsg.startsWith("USERS:")) {
-                            String[] users = finalMsg.substring(6).split(",");
-                            view.userListView.getItems().setAll(users);
-                        } else {
-                            boolean isOwn = finalMsg.startsWith(username + ":");
-                            String sender = finalMsg.split(":")[0];
-                            String text = finalMsg.substring(finalMsg.indexOf(":")+1).trim();
-                            view.appendMessage(sender, text, isOwn);
-                        }
-                    });
-                }
-            } catch (IOException e) {
-                Platform.runLater(() -> view.appendMessage("System", "Verbindung zum Server fehlgeschlagen!", false));
             }
-        }).start();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
-    private void setupInputListener() {
-        view.inputField.setOnAction(e -> {
-            String msg = view.inputField.getText();
-            if (out != null && !msg.isEmpty()) {
-                out.println(msg);
-                view.appendMessage(username, msg, true);
-                view.inputField.clear();
-            }
-        });
+    public void sendMessage(String text) {
+        if (out != null && !text.isEmpty()) {
+            out.println(text);
+            model.addMessage(new Message(username, text));
+        }
     }
 
-    public void closeConnection() {
+    public void disconnect() {
         try {
             if (out != null) out.println("EXIT");
-            if (in != null) in.close();
-            if (out != null) out.close();
             if (socket != null) socket.close();
-        } catch (IOException e) { e.printStackTrace(); }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }

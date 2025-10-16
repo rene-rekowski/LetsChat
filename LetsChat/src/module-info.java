@@ -12,7 +12,6 @@ module LetsChat {
     exports client;
     exports client.controller;
     exports client.view;
-    exports model;
     exports server;
 }
 

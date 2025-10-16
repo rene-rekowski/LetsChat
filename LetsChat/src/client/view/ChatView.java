@@ -1,57 +1,76 @@
 package client.view;
 
+import client.controller.ChatController;
+import client.model.ChatModel;
+import client.model.Message;
+import client.model.User;
+import javafx.application.Platform;
+import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
-import javafx.scene.text.TextFlow;
-import javafx.scene.paint.Color;
-import javafx.scene.shape.Circle;
-import javafx.scene.text.Text;
+import javafx.scene.text.*;
+import javafx.stage.Stage;
 
 public class ChatView {
-    public TextFlow chatArea = new TextFlow();
-    public TextField inputField = new TextField();
-    public ListView<String> userListView = new ListView<>();
+    private final ChatModel model;
+    private final ChatController controller;
+    private TextFlow chatArea;
+    private TextField inputField;
+    private ListView<User> userListView;
 
-    public BorderPane createLayout() {
-        chatArea.setPrefHeight(350);
+    public ChatView(ChatModel model, ChatController controller) {
+        this.model = model;
+        this.controller = controller;
+    }
+
+    public void start(Stage stage) {
+        chatArea = new TextFlow();
         ScrollPane chatScroll = new ScrollPane(chatArea);
         chatScroll.setFitToWidth(true);
         chatScroll.setPrefWidth(550);
+        chatScroll.setPrefHeight(350);
 
+        inputField = new TextField();
         inputField.setPromptText("Nachricht schreiben...");
         inputField.setDisable(true);
-
-        userListView.setPrefWidth(150);
-        userListView.setCellFactory(lv -> new ListCell<String>() {
-            private final Label label = new Label();
-            private final Circle statusCircle = new Circle(5, Color.GREEN);
-
-            @Override
-            protected void updateItem(String user, boolean empty) {
-                super.updateItem(user, empty);
-                if (empty || user == null || user.isBlank()) {
-                    setText(null); setGraphic(null);
-                } else {
-                    label.setText(user);
-                    HBox hbox = new HBox(5, label, statusCircle);
-                    setGraphic(hbox);
-                }
-            }
+        inputField.setOnAction(e -> {
+            String msg = inputField.getText();
+            controller.sendMessage(msg);
+            inputField.clear();
+            refreshChat();
         });
+
+        userListView = new ListView<>();
+        userListView.setPrefWidth(150);
+        userListView.setCellFactory(lv -> new UserListCell());
 
         HBox mainLayout = new HBox(10, chatScroll, userListView);
         VBox root = new VBox(10, mainLayout, inputField);
-        BorderPane pane = new BorderPane();
-        pane.setCenter(root);
-        return pane;
+
+        Scene scene = new Scene(root, 700, 400);
+        stage.setScene(scene);
+        stage.setTitle("LetsChat");
+        stage.setResizable(false);
+        stage.show();
+
+        inputField.setDisable(false);
+        refreshChat();
+        refreshUsers();
     }
 
-    public void appendMessage(String sender, String message, boolean isOwn) {
-        Text name = new Text(sender + ": ");
-        name.setFill(isOwn ? Color.BLUE : Color.BLACK);
-        Text msg = new Text(message + "\n");
-        msg.setFill(isOwn ? Color.BLUE : Color.BLACK);
-        chatArea.getChildren().addAll(name, msg);
-        chatArea.layout();
+    private void refreshChat() {
+        Platform.runLater(() -> {
+            chatArea.getChildren().clear();
+            for (Message m : model.getMessages()) {
+                Text sender = new Text(m.getSender() + ": ");
+                sender.setFont(Font.font("Arial", FontWeight.BOLD, 12));
+                Text text = new Text(m.getText() + "\n");
+                chatArea.getChildren().addAll(sender, text);
+            }
+        });
+    }
+
+    private void refreshUsers() {
+        Platform.runLater(() -> userListView.getItems().setAll(model.getUsers()));
     }
 }
