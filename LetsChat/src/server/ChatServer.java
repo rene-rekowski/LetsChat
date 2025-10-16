@@ -5,37 +5,44 @@ import java.net.*;
 import java.util.*;
 
 public class ChatServer {
+    private static final List<ClientHandler> clients = Collections.synchronizedList(new ArrayList<>());
+    private static final int PORT = 5565;
 
-    private static final int PORT = 5562;
-    private static final List<ClientHandler> clients = new ArrayList<>();
+    public static void main(String[] args) {
+        System.out.println("Server gestartet auf Port " + PORT);
 
-    public static void main(String[] args) throws IOException {
-        ServerSocket serverSocket = new ServerSocket(PORT);
-        System.out.println("Server gestartet. Wartet auf Clients auf Port " + PORT + "...");
-
-        while (true) {
-            Socket socket = serverSocket.accept();
-            ClientHandler clientHandler = new ClientHandler(socket);
-            clients.add(clientHandler);
-            new Thread(clientHandler).start();
+        try (ServerSocket serverSocket = new ServerSocket(PORT)) {
+            while (true) {
+                Socket socket = serverSocket.accept();
+                ClientHandler handler = new ClientHandler(socket);
+                clients.add(handler);
+                new Thread(handler).start();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 
     public static void broadcast(String message, ClientHandler sender) {
-        for (ClientHandler c : clients) {
-            if (c != sender) {
-                c.sendMessage(message);
+        synchronized (clients) {
+            for (ClientHandler c : clients) {
+                if (c != sender) {
+                    c.sendMessage(message);
+                }
             }
         }
     }
 
     public static void updateUserList() {
-        StringBuilder userList = new StringBuilder("USERS:");
-        for (ClientHandler c : clients) {
-            userList.append(c.getUsername()).append(",");
-        }
-        for (ClientHandler c : clients) {
-            c.sendMessage(userList.toString());
+        synchronized (clients) {
+            StringBuilder sb = new StringBuilder("USERS:");
+            for (ClientHandler c : clients) {
+                sb.append(c.getUsername()).append(",");
+            }
+            String userListMsg = sb.toString();
+            for (ClientHandler c : clients) {
+                c.sendMessage(userListMsg);
+            }
         }
     }
 
@@ -54,16 +61,16 @@ public class ChatServer {
         }
 
         public void sendMessage(String message) {
-            out.println(message);
+            if (out != null) out.println(message);
         }
 
         @Override
         public void run() {
             try {
-                in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 out = new PrintWriter(socket.getOutputStream(), true);
+                in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
-                // Name vom Client abfragen
+                // Name vom Client empfangen
                 out.println("NAME?");
                 username = in.readLine();
                 System.out.println(username + " hat den Chat betreten");
@@ -73,19 +80,23 @@ public class ChatServer {
 
                 String msg;
                 while ((msg = in.readLine()) != null) {
-                    if (msg.equalsIgnoreCase("EXIT")) break;
+                    if ("EXIT".equalsIgnoreCase(msg)) break;
                     broadcast(username + ": " + msg, this);
                 }
 
             } catch (IOException e) {
                 System.out.println(username + " hat den Chat unerwartet verlassen");
             } finally {
-                try { socket.close(); } catch (IOException ignored) {}
-                clients.remove(this);
-                broadcast(username + " hat den Chat verlassen", this);
-                updateUserList();
-                System.out.println(username + " entfernt. Aktuelle Clients: " + clients.size());
+                cleanup();
             }
+        }
+
+        private void cleanup() {
+            try { socket.close(); } catch (IOException ignored) {}
+            clients.remove(this);
+            broadcast(username + " hat den Chat verlassen", this);
+            updateUserList();
+            System.out.println(username + " ist aus dem Chat gegangen");
         }
     }
 }

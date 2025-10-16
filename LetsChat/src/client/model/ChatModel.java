@@ -1,14 +1,14 @@
 package client.model;
 
-import java.util.ArrayList;
-import java.util.List;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 
 public class ChatModel {
-    private final List<Message> messages = new ArrayList<>();
-    private final List<User> users = new ArrayList<>();
+    private final ObservableList<Message> messages = FXCollections.observableArrayList();
+    private final ObservableList<User> users = FXCollections.observableArrayList();
 
-    public List<Message> getMessages() { return messages; }
-    public List<User> getUsers() { return users; }
+    public ObservableList<Message> getMessages() { return messages; }
+    public ObservableList<User> getUsers() { return users; }
 
     public void addMessage(Message m) { messages.add(m); }
     public void addUser(User u) { users.add(u); }

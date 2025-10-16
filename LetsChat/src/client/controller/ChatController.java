@@ -3,6 +3,7 @@ package client.controller;
 import client.model.ChatModel;
 import client.model.Message;
 import client.model.User;
+import javafx.application.Platform;
 
 import java.io.*;
 import java.net.Socket;
@@ -42,21 +43,28 @@ public class ChatController {
         String msg;
         try {
             while ((msg = in.readLine()) != null) {
-                if (msg.startsWith("USERS:")) {
-                    String[] names = msg.substring(6).split(",");
-                    model.getUsers().clear();
-                    Arrays.stream(names)
-                            .filter(s -> !s.isBlank())
-                            .forEach(n -> model.addUser(new User(n)));
+                final String finalMsg = msg;
+                if (finalMsg.startsWith("USERS:")) {
+                    String[] names = finalMsg.substring(6).split(",");
+                    Platform.runLater(() -> {
+                        model.getUsers().clear();
+                        for (String n : names) {
+                            if (!n.isBlank()) model.addUser(new User(n));
+                        }
+                    });
                 } else {
-                    model.addMessage(new Message(msg.split(":")[0],
-                            msg.substring(msg.indexOf(":") + 1).trim()));
+                    Platform.runLater(() -> {
+                        model.addMessage(new Message(finalMsg.split(":")[0],
+                                finalMsg.substring(finalMsg.indexOf(":") + 1).trim()));
+                    });
                 }
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
+
+
 
     public void sendMessage(String text) {
         if (out != null && !text.isEmpty()) {
